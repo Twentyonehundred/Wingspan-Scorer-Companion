@@ -30,7 +30,17 @@ import {
 } from 'firebase/firestore'
 import { auth, db, firebaseConfigured } from '../firebase'
 import { groupKeyFor } from '../lib/scoring'
-import type { Draft, Game, Player } from '../types'
+import type { Draft, Game, ModuleKey, Player } from '../types'
+
+/**
+ * The setup to open on next time. Held against the account rather than derived
+ * from the last game, so it survives deleting that game and follows you to
+ * another device.
+ */
+export interface Prefs {
+  lastModules: ModuleKey[]
+  lastPlayerIds: string[]
+}
 
 /* -------------------------------------------------------------------------- */
 /* Backends                                                                    */
@@ -39,26 +49,34 @@ import type { Draft, Game, Player } from '../types'
 interface Snapshot {
   players: Player[]
   games: Game[]
+  prefs: Prefs | null
 }
 
 interface Backend {
   subscribe(onData: (s: Snapshot) => void): Unsubscribe
   putPlayer(player: Player): Promise<void>
   putGame(game: Game): Promise<void>
+  putPrefs(prefs: Prefs): Promise<void>
   removePlayer(id: string): Promise<void>
   removeGame(id: string): Promise<void>
 }
+
+const EMPTY: Snapshot = { players: [], games: [], prefs: null }
 
 const LOCAL_KEY = 'ws.local'
 
 function readLocal(): Snapshot {
   try {
     const raw = localStorage.getItem(LOCAL_KEY)
-    if (!raw) return { players: [], games: [] }
+    if (!raw) return EMPTY
     const parsed = JSON.parse(raw) as Partial<Snapshot>
-    return { players: parsed.players ?? [], games: parsed.games ?? [] }
+    return {
+      players: parsed.players ?? [],
+      games: parsed.games ?? [],
+      prefs: parsed.prefs ?? null,
+    }
   } catch {
-    return { players: [], games: [] }
+    return EMPTY
   }
 }
 
@@ -100,6 +118,9 @@ function localBackend(): Backend {
       const games = state.games.filter((g) => g.id !== game.id).concat(game)
       commit({ ...state, games })
     },
+    async putPrefs(prefs) {
+      commit({ ...state, prefs })
+    },
     async removePlayer(id) {
       commit({ ...state, players: state.players.filter((p) => p.id !== id) })
     },
@@ -113,12 +134,14 @@ function firestoreBackend(uid: string): Backend {
   const root = doc(db!, 'users', uid)
   const playersRef = collection(root, 'players')
   const gamesRef = collection(root, 'games')
+  const prefsRef = doc(collection(root, 'prefs'), 'setup')
 
   return {
     subscribe(onData) {
       let players: Player[] = []
       let games: Game[] = []
-      const push = () => onData({ players, games })
+      let prefs: Prefs | null = null
+      const push = () => onData({ players, games, prefs })
 
       const offPlayers = onSnapshot(playersRef, (snap) => {
         players = snap.docs.map((d) => ({ ...(d.data() as Omit<Player, 'id'>), id: d.id }))
@@ -128,9 +151,14 @@ function firestoreBackend(uid: string): Backend {
         games = snap.docs.map((d) => ({ ...(d.data() as Omit<Game, 'id'>), id: d.id }))
         push()
       })
+      const offPrefs = onSnapshot(prefsRef, (snap) => {
+        prefs = snap.exists() ? (snap.data() as Prefs) : null
+        push()
+      })
       return () => {
         offPlayers()
         offGames()
+        offPrefs()
       }
     },
     async putPlayer(player) {
@@ -141,6 +169,9 @@ function firestoreBackend(uid: string): Backend {
       const { id, ...rest } = game
       // Firestore rejects `undefined`; a missing tiebreak is stored as null.
       await setDoc(doc(gamesRef, id), { ...rest, winnerId: rest.winnerId ?? null })
+    },
+    async putPrefs(prefs) {
+      await setDoc(prefsRef, prefs)
     },
     async removePlayer(id) {
       await deleteDoc(doc(playersRef, id))
@@ -183,12 +214,16 @@ interface Store {
 
   players: Player[]
   games: Game[]
+  prefs: Prefs | null
 
   addPlayer: (name: string) => Promise<Player>
   renamePlayer: (id: string, name: string) => Promise<void>
+  /** Also removes that player's games — see the note on the implementation. */
   deletePlayer: (id: string) => Promise<void>
+  gamesForPlayer: (id: string) => Game[]
   saveGame: (game: Game) => Promise<void>
   deleteGame: (id: string) => Promise<void>
+  saveSetup: (prefs: Prefs) => Promise<void>
 
   draft: Draft | null
   setDraft: (draft: Draft | null) => void
@@ -207,7 +242,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     firebaseConfigured ? 'loading' : 'local',
   )
   const [authError, setAuthError] = useState<string | null>(null)
-  const [snapshot, setSnapshot] = useState<Snapshot>({ players: [], games: [] })
+  const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY)
   const [ready, setReady] = useState(!firebaseConfigured)
   const [draft, setDraftState] = useState<Draft | null>(() => readDraft())
 
@@ -297,7 +332,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const signOutToSandbox = useCallback(async () => {
     if (!auth) return
-    setSnapshot({ players: [], games: [] })
+    setSnapshot(EMPTY)
     await fbSignOut(auth)
     await signInAnonymously(auth)
   }, [])
@@ -325,9 +360,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [snapshot.players],
   )
 
-  const deletePlayer = useCallback(async (id: string) => {
-    await backendRef.current?.removePlayer(id)
-  }, [])
+  const gamesForPlayer = useCallback(
+    (id: string) => snapshot.games.filter((g) => g.playerIds.includes(id)),
+    [snapshot.games],
+  )
+
+  /**
+   * A game is the exact set of people who sat down, and every total, group and
+   * average is keyed on that set — so a game missing one of its players is not
+   * a game any more. Deleting a player takes their games with them rather than
+   * leaving "Unknown" rows behind. The UI names the count before this runs.
+   */
+  const deletePlayer = useCallback(
+    async (id: string) => {
+      const affected = snapshot.games.filter((g) => g.playerIds.includes(id))
+      await Promise.all(affected.map((g) => backendRef.current?.removeGame(g.id) ?? Promise.resolve()))
+      await backendRef.current?.removePlayer(id)
+
+      // Drop them from the remembered setup so it can't seed a dead id.
+      const remembered = snapshot.prefs
+      if (remembered?.lastPlayerIds.includes(id)) {
+        await backendRef.current?.putPrefs({
+          ...remembered,
+          lastPlayerIds: remembered.lastPlayerIds.filter((p) => p !== id),
+        })
+      }
+    },
+    [snapshot.games, snapshot.prefs],
+  )
 
   const saveGame = useCallback(async (game: Game) => {
     await backendRef.current?.putGame({ ...game, groupKey: groupKeyFor(game.playerIds) })
@@ -335,6 +395,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteGame = useCallback(async (id: string) => {
     await backendRef.current?.removeGame(id)
+  }, [])
+
+  const saveSetup = useCallback(async (next: Prefs) => {
+    await backendRef.current?.putPrefs(next)
   }, [])
 
   const players = useMemo(
@@ -356,16 +420,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     signOutToSandbox,
     players,
     games,
+    prefs: snapshot.prefs,
     addPlayer,
     renamePlayer,
     deletePlayer,
+    gamesForPlayer,
     saveGame,
     deleteGame,
+    saveSetup,
     draft,
     setDraft,
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+}
+
+export interface Profile {
+  name: string | null
+  photoURL: string | null
+  email: string | null
+}
+
+/**
+ * Linking Google to an anonymous session leaves the user's own displayName and
+ * photoURL null — the provider keeps them. Read through to providerData so the
+ * account shows a real name and picture either way.
+ */
+export function profileFor(user: User | null): Profile {
+  if (!user) return { name: null, photoURL: null, email: null }
+  const google = user.providerData.find((p) => p.providerId === 'google.com')
+  const provider = google ?? user.providerData[0]
+  return {
+    name: user.displayName ?? provider?.displayName ?? null,
+    photoURL: user.photoURL ?? provider?.photoURL ?? null,
+    email: user.email ?? provider?.email ?? null,
+  }
 }
 
 function errorMessage(err: unknown): string {

@@ -1,8 +1,18 @@
 import { useState } from 'react'
-import { Button, Card, Chip, PlayerDot, SectionTitle, Sheet } from '../components/ui'
-import { useStore } from '../data/store'
+import {
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  ConfirmDialog,
+  PlayerDot,
+  SectionTitle,
+  Sheet,
+} from '../components/ui'
+import { profileFor, useStore } from '../data/store'
 import { colorSlots } from '../lib/format'
 import type { ThemePref } from '../lib/theme'
+import type { Player } from '../types'
 
 const THEMES: { key: ThemePref; label: string }[] = [
   { key: 'system', label: 'System' },
@@ -32,13 +42,17 @@ export function Settings({
     signOutToSandbox,
     renamePlayer,
     deletePlayer,
+    gamesForPlayer,
   } = useStore()
+  const profile = profileFor(user)
   const slots = colorSlots(players, players.map((p) => p.id))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<Player | null>(null)
 
-  const gameCount = (playerId: string) =>
-    games.filter((g) => g.playerIds.includes(playerId)).length
+  const pendingGames = pendingDelete ? gamesForPlayer(pendingDelete.id).length : 0
+
+  const gameCount = (playerId: string) => gamesForPlayer(playerId).length
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ players, games }, null, 2)], {
@@ -75,9 +89,20 @@ export function Settings({
               </p>
             ) : authStatus === 'signed-in' ? (
               <>
-                <p className="text-sm text-ink-2">
-                  Synced as <span className="font-semibold text-ink">{user?.email ?? 'your account'}</span>.
-                </p>
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    signedIn
+                    photoURL={profile.photoURL}
+                    name={profile.name ?? profile.email}
+                    size={44}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold">
+                      {profile.name ?? 'Signed in'}
+                    </p>
+                    <p className="truncate text-sm text-ink-2">{profile.email ?? 'Synced'}</p>
+                  </div>
+                </div>
                 <Button variant="secondary" className="mt-3 w-full" onClick={() => void signOutToSandbox()}>
                   Sign out
                 </Button>
@@ -137,9 +162,8 @@ export function Settings({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={played > 0}
-                      title={played > 0 ? 'Played games — delete those first' : undefined}
-                      onClick={() => void deletePlayer(player.id)}
+                      aria-label={`Delete ${player.name}`}
+                      onClick={() => setPendingDelete(player)}
                     >
                       Delete
                     </Button>
@@ -159,6 +183,28 @@ export function Settings({
           </Button>
         </section>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete ${pendingDelete?.name ?? 'player'}?`}
+        body={
+          pendingGames > 0 ? (
+            <p>
+              This also deletes the {pendingGames} game{pendingGames === 1 ? '' : 's'} they played
+              in, because a game's scores and stats only mean anything with everyone who sat down.
+              It can't be undone.
+            </p>
+          ) : (
+            <p>They haven't played any games, so nothing else is affected.</p>
+          )
+        }
+        confirmLabel={pendingGames > 0 ? `Delete player and ${pendingGames} game${pendingGames === 1 ? '' : 's'}` : 'Delete player'}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) void deletePlayer(pendingDelete.id)
+          setPendingDelete(null)
+        }}
+      />
     </Sheet>
   )
 }

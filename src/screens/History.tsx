@@ -2,9 +2,16 @@ import { useMemo, useState } from 'react'
 import { GameSummary } from '../components/GameSummary'
 import { GroupChips, groupLabel } from '../components/GroupChips'
 import { ScorePad } from '../components/ScorePad'
-import { Button, Card, Empty, PlayerDot, Sheet } from '../components/ui'
+import { Button, Card, ConfirmDialog, Empty, PlayerDot, Sheet, dismissSheet } from '../components/ui'
 import { useStore } from '../data/store'
-import { colorSlots, formatRelativeDay, fromDateInputValue, playerName, toDateInputValue } from '../lib/format'
+import {
+  colorSlots,
+  formatDate,
+  formatRelativeDay,
+  fromDateInputValue,
+  playerName,
+  toDateInputValue,
+} from '../lib/format'
 import { categoriesFor, standingsFor } from '../lib/scoring'
 import { summariseGroups } from '../lib/stats'
 import { MODULE_DEFS, type CategoryKey, type Game, type ScoreLine } from '../types'
@@ -133,6 +140,7 @@ function GameSheet({ game, onClose }: { game: Game | null; onClose: () => void }
   if (!game) return null
 
   const categories = categoriesFor(game.modules)
+  const standings = standingsFor(game)
 
   const change = (playerId: string, category: CategoryKey, raw: string) => {
     const line: ScoreLine = { ...game.scores[playerId] }
@@ -181,18 +189,31 @@ function GameSheet({ game, onClose }: { game: Game | null; onClose: () => void }
               Clear tiebreak
             </Button>
           ) : null}
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (!confirmDelete) return setConfirmDelete(true)
-              void deleteGame(game.id)
-              close()
-            }}
-          >
-            {confirmDelete ? 'Tap again to delete' : 'Delete'}
+          <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+            Delete
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this game?"
+        body={
+          <>
+            <p>
+              {formatDate(game.playedAt)} · {standings.map((s) => `${playerName(players, s.playerId)} ${s.total}`).join(' · ')}
+            </p>
+            <p className="mt-2">This removes it from history and stats. It can't be undone.</p>
+          </>
+        }
+        confirmLabel="Delete game"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          void deleteGame(game.id)
+          setConfirmDelete(false)
+          dismissSheet(close)
+        }}
+      />
     </Sheet>
   )
 }

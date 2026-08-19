@@ -1,7 +1,8 @@
 import {
   useEffect,
   useRef,
-  type ButtonHTMLAttributes,
+  useState,
+  type ComponentPropsWithRef,
   type ReactNode,
 } from 'react'
 import { seriesColor } from '../lib/format'
@@ -33,7 +34,7 @@ export function Button({
   size = 'md',
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+}: ComponentPropsWithRef<'button'> & {
   variant?: ButtonVariant
   size?: keyof typeof buttonSizes
 }) {
@@ -118,6 +119,77 @@ export function Chip({
     >
       {children}
     </button>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+
+function initialsFor(name?: string | null): string {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return ''
+  // An email falls back to its first letter; a display name gives two.
+  if (trimmed.includes('@')) return trimmed[0].toUpperCase()
+  const parts = trimmed.split(/\s+/)
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : ''))
+    .toUpperCase()
+}
+
+/**
+ * The account button's face: the Google profile photo when signed in, initials
+ * when that account has no photo, and a person glyph while the session is still
+ * anonymous — so being signed in is visible without opening Settings.
+ */
+export function Avatar({
+  signedIn,
+  photoURL,
+  name,
+  size = 40,
+}: {
+  signedIn: boolean
+  photoURL?: string | null
+  name?: string | null
+  size?: number
+}) {
+  // Google's lh3 URLs 403 intermittently; fall back rather than show a gap.
+  const [broken, setBroken] = useState(false)
+  useEffect(() => setBroken(false), [photoURL])
+
+  const initials = signedIn ? initialsFor(name) : ''
+
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-ink-2 ring-1 ring-hairline"
+      style={{ width: size, height: size }}
+    >
+      {signedIn && photoURL && !broken ? (
+        <img
+          src={photoURL}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : initials ? (
+        <span className="font-bold text-ink" style={{ fontSize: size * 0.36 }}>
+          {initials}
+        </span>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          width={size * 0.5}
+          height={size * 0.5}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 20a7 7 0 0 1 14 0" />
+        </svg>
+      )}
+    </span>
   )
 }
 
@@ -213,6 +285,76 @@ export function ScoreField({
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Confirmation for anything that destroys data. Deliberately a separate layer
+ * above the sheet rather than an inline "tap again", so what is about to be
+ * deleted can be named and the safe choice can hold focus.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title: string
+  body?: ReactNode
+  confirmLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (open) cancelRef.current?.focus()
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center px-6"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          // Marks the event handled so the sheet underneath stays open.
+          e.preventDefault()
+          onCancel()
+        }
+      }}
+    >
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} role="presentation" />
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative w-full max-w-sm rounded-3xl bg-surface p-5 ring-1 ring-hairline"
+      >
+        <h2 className="text-xl font-bold">{title}</h2>
+        {body ? <div className="mt-2 text-sm text-ink-2">{body}</div> : null}
+        <div className="mt-5 flex gap-2">
+          <Button ref={cancelRef} variant="secondary" className="flex-1" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="danger" className="flex-1" onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Dismiss a sheet from code (after a delete, say) through the same history
+ * entry the UI uses, so Back and the sheet never disagree.
+ */
+export function dismissSheet(onClose: () => void) {
+  if (window.history.state?.sheet) window.history.back()
+  else onClose()
+}
+
 export function Sheet({
   open,
   onClose,
@@ -226,15 +368,36 @@ export function Sheet({
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
+  // Callers rebuild their close handler on every render, so hold it in a ref —
+  // the effects below must not re-run and push a second history entry.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  /**
+   * A sheet reads as a place you navigated to, so Back should dismiss it rather
+   * than leave the app. Opening pushes an entry; every dismissal path goes
+   * through that entry so the two can never disagree.
+   */
+  useEffect(() => {
+    if (!open) return
+    window.history.pushState({ sheet: true }, '')
+    const onPop = () => closeRef.current()
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [open])
+
+  const dismiss = () => dismissSheet(onClose)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // A confirm dialog on top handles its own Escape and marks it handled.
+      if (e.key === 'Escape' && !e.defaultPrevented) dismissSheet(closeRef.current)
     }
     document.addEventListener('keydown', onKey)
     ref.current?.focus()
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
@@ -242,7 +405,7 @@ export function Sheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={dismiss}
         role="presentation"
       />
       <div
@@ -256,11 +419,24 @@ export function Sheet({
           'pad-safe-bottom sm:max-w-md sm:rounded-3xl focus:outline-none'
         }
       >
-        <div className="sticky top-0 flex items-center justify-between gap-3 bg-surface px-5 pt-5 pb-3">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close">
-            Close
+        <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface px-5 pt-5 pb-3">
+          <Button variant="ghost" size="sm" onClick={dismiss} className="-ml-3 pr-3 pl-2">
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            Back
           </Button>
+          <h2 className="min-w-0 flex-1 truncate text-xl font-bold">{title}</h2>
         </div>
         <div className="px-5 pb-6">{children}</div>
       </div>

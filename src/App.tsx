@@ -3,6 +3,8 @@ import { History } from './screens/History'
 import { Play } from './screens/Play'
 import { Settings } from './screens/Settings'
 import { Stats } from './screens/Stats'
+import { Avatar } from './components/ui'
+import { profileFor, useStore } from './data/store'
 import { useTheme } from './lib/theme'
 
 type Tab = 'play' | 'history' | 'stats'
@@ -31,6 +33,11 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('play')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useTheme()
+  const { user, authStatus } = useStore()
+
+  const signedIn = authStatus === 'signed-in'
+  const profile = profileFor(user)
+  const account = profile.name ?? profile.email
 
   return (
     <div className="min-h-dvh bg-plane">
@@ -40,13 +47,14 @@ export default function App() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-            className="grid h-10 w-10 place-items-center rounded-full bg-surface-2 text-ink-2"
+            aria-label={
+              signedIn
+                ? `Account and settings — signed in as ${account ?? 'your Google account'}`
+                : 'Account and settings — not signed in'
+            }
+            className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.4-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V10a1.7 1.7 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-            </svg>
+            <Avatar signedIn={signedIn} photoURL={profile.photoURL} name={account} />
           </button>
         </div>
       </header>

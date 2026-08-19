@@ -71,16 +71,26 @@ interface SetupState {
 }
 
 function Setup() {
-  const { players, games, setDraft } = useStore()
+  const { players, games, prefs, setDraft, saveSetup } = useStore()
   const [edited, setEdited] = useState<SetupState | null>(null)
   const [picking, setPicking] = useState(false)
 
-  // Default to the last game's setup — the usual pairing is then one tap away.
+  /**
+   * Open on the lineup you last played — the usual pairing is then one tap
+   * away. The saved preference leads because it survives deleting that game;
+   * the last game is the fallback for accounts from before it existed. Either
+   * way the ids are filtered against players who still exist.
+   */
   const lastGame = games[0]
-  const seed = useMemo<SetupState>(
-    () => ({ modules: lastGame?.modules ?? [], playerIds: lastGame?.playerIds ?? [] }),
-    [lastGame],
-  )
+  const seed = useMemo<SetupState>(() => {
+    const known = new Set(players.map((p) => p.id))
+    const remembered = (prefs?.lastPlayerIds ?? []).filter((id) => known.has(id))
+    if (remembered.length) return { modules: prefs?.lastModules ?? [], playerIds: remembered }
+    return {
+      modules: lastGame?.modules ?? [],
+      playerIds: (lastGame?.playerIds ?? []).filter((id) => known.has(id)),
+    }
+  }, [prefs, lastGame, players])
   const state = edited ?? seed
 
   const available = modulesForPlayerCount(state.modules, state.playerIds.length)
@@ -178,7 +188,12 @@ function Setup() {
           size="lg"
           className="w-full shadow-lg"
           disabled={state.playerIds.length === 0}
-          onClick={() => setDraft({ modules: available, playerIds: state.playerIds, scores: {} })}
+          onClick={() => {
+            // Remember the lineup at the moment it's chosen, not on save, so a
+            // discarded game still updates who you normally play with.
+            void saveSetup({ lastModules: available, lastPlayerIds: state.playerIds })
+            setDraft({ modules: available, playerIds: state.playerIds, scores: {} })
+          }}
         >
           Start scoring
         </Button>
