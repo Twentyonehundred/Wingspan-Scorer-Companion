@@ -27,6 +27,16 @@ you switch on whatever applies:
 That way a game using two expansions at once is still one score pad. The duet
 map is a single number you type in; the app doesn't model the map itself.
 
+**Entering scores.** Every cell is − / box / +: type a number, or tap, since
+most categories are counted in ones and tapping beats the keyboard for those.
+Arrow keys do the same thing for anyone on a laptop. The steppers cost width,
+so a phone scrolls the pad sideways from three players up, with the category
+column pinned.
+
+**Version.** The footer shows the version and when that copy was built (`dev`
+under the dev server). An installed PWA serving a service-worker-cached build
+is otherwise indistinguishable from a fresh one.
+
 **Ties.** Wingspan breaks a tie on most unused food tokens, which never reaches
 the pad — so a tie stays a tie until you tap the winner, on the results screen
 or later from History.

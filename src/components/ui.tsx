@@ -247,9 +247,16 @@ export function Toggle({
 
 /* -------------------------------------------------------------------------- */
 
+const SCORE_MAX = 999
+
 /**
  * Numeric score field. Kept as a string so the box can be genuinely empty
  * rather than showing a 0 you have to clear before typing.
+ *
+ * Most Wingspan categories are counted in ones, so the − / + on either side do
+ * the work on a phone and the keyboard is for the occasional big bird total.
+ * The box itself is narrow to pay for them; three digits still fit because the
+ * columns stretch to fill whatever width is going.
  */
 export function ScoreField({
   value,
@@ -262,24 +269,94 @@ export function ScoreField({
   ariaLabel: string
   autoFocus?: boolean
 }) {
+  const current = value === '' ? 0 : Number(value)
+  const nudge = (by: number) => {
+    const next = Math.min(SCORE_MAX, Math.max(0, current + by))
+    onChange(String(next))
+  }
+
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      enterKeyHint="next"
-      autoFocus={autoFocus}
-      aria-label={ariaLabel}
-      value={value}
-      onFocus={(e) => e.currentTarget.select()}
-      onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
-      placeholder="0"
+    <div className="flex items-stretch gap-0.5">
+      <Stepper
+        label={`Subtract one from ${ariaLabel}`}
+        disabled={current <= 0}
+        onPress={() => nudge(-1)}
+      >
+        <path d="M5 12h14" />
+      </Stepper>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        enterKeyHint="next"
+        autoFocus={autoFocus}
+        aria-label={ariaLabel}
+        value={value}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+        onKeyDown={(e) => {
+          // Arrow keys do what the buttons do, for anyone on a keyboard.
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault()
+            nudge(e.key === 'ArrowUp' ? 1 : -1)
+          }
+        }}
+        placeholder="0"
+        className={
+          'h-12 min-w-0 flex-1 rounded-xl bg-surface-2 px-0 text-center ' +
+          'text-xl font-bold tabular-nums text-ink placeholder:text-muted/50 ' +
+          'focus:outline-none focus:ring-2 focus:ring-ink'
+        }
+      />
+      <Stepper
+        label={`Add one to ${ariaLabel}`}
+        disabled={current >= SCORE_MAX}
+        onPress={() => nudge(1)}
+      >
+        <path d="M12 5v14 M5 12h14" />
+      </Stepper>
+    </div>
+  )
+}
+
+function Stepper({
+  label,
+  disabled,
+  onPress,
+  children,
+}: {
+  label: string
+  disabled: boolean
+  onPress: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onPress}
+      // Keep the caret (and the phone keyboard) where it is when a stepper is
+      // tapped mid-entry.
+      onPointerDown={(e) => e.preventDefault()}
       className={
-        'h-14 w-full rounded-2xl bg-surface-2 text-center text-2xl font-bold ' +
-        'tabular-nums text-ink placeholder:text-muted/50 ' +
-        'focus:outline-none focus:ring-2 focus:ring-ink'
+        'flex h-12 w-7 shrink-0 items-center justify-center rounded-xl bg-surface-2 ' +
+        'text-ink-2 active:bg-hairline disabled:opacity-35 ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
       }
-    />
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      >
+        {children}
+      </svg>
+    </button>
   )
 }
 

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { stamp, version } from 'virtual:build-info'
 import { History } from './screens/History'
 import { Play } from './screens/Play'
 import { Settings } from './screens/Settings'
@@ -66,6 +67,12 @@ export default function App() {
         {tab === 'play' ? <Play onGoToHistory={() => setTab('history')} /> : null}
         {tab === 'history' ? <History /> : null}
         {tab === 'stats' ? <Stats /> : null}
+
+        {/* Which copy am I looking at? An installed PWA serving a cached build
+            is indistinguishable from a fresh one without this. */}
+        <p className="mt-10 text-center text-[11px] text-muted">
+          v{version} · {stamp}
+        </p>
       </main>
 
       <nav className="pad-safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-surface">

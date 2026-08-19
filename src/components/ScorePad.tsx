@@ -21,9 +21,10 @@ export function ScorePad({
   onChange: (playerId: string, category: CategoryDef['key'], raw: string) => void
 }) {
   const slots = colorSlots(players, playerIds)
-  // Sized so three players still fit a phone without scrolling; four or five
-  // overflow and the category column stays pinned.
-  const columns = `minmax(78px, 1.3fr) repeat(${playerIds.length}, minmax(62px, 1fr))`
+  // A cell is − / box / +, so it can't go below about 96px. Two players fit a
+  // phone comfortably; three or more overflow and scroll with the category
+  // column pinned.
+  const columns = `minmax(70px, 1.1fr) repeat(${playerIds.length}, minmax(96px, 1fr))`
 
   return (
     <div className="overflow-x-auto">
