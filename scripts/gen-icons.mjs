@@ -7,9 +7,11 @@ import sharp from 'sharp'
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
-const BG = '#1a1a19'
-const BODY = '#eb6834'
-const WING = '#c04a1d'
+// Warm charcoal tile, terracotta bird — the dark-mode surface and series-3
+// step from src/index.css, so the icon and the app agree.
+const BG = '#1b1915'
+const BODY = '#d2600d'
+const WING = '#9c4708'
 
 /** @param {{ bleed: boolean }} opts */
 const svg = ({ bleed }) => {

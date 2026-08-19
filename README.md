@@ -36,10 +36,14 @@ Two-player history stays clean when someone joins for a night, with no groups
 to create or manage. Groups are listed most-played first, so your usual pairing
 is selected by default.
 
-**Colours** are assigned per player and stored, so the same person is the same
-colour in every chart. The categorical palette is validated for colour-vision
-deficiency and contrast in both light and dark; every bar carries a visible
-value because three of the light-mode hues sit under 3:1 on the surface.
+**Colours** are Wingspan's own — parchment and warm charcoal for the surfaces,
+and eight habitat and food-token hues for the series. They're assigned per
+player and stored, so the same person is the same colour in every chart, and
+the same slot in light and dark. The categorical palette is validated for
+colour-vision deficiency and contrast in both modes: worst adjacent pair ΔE
+15.9 (light) and 16.5 (dark) against a target of 8, and every step clears 3:1
+against the darkest surface it can land on. Every bar still carries a visible
+value, so identity is never colour alone.
 
 ## Firebase setup
 

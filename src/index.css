@@ -5,9 +5,12 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /* ---------------------------------------------------------------------------
-   Palette. Light and dark are separately chosen steps of the same hues, both
-   validated against their own surface (see README). Series slots are used for
-   player identity in charts and must be assigned in fixed order, never cycled.
+   Palette — Wingspan's own colours. The neutrals are the board's parchment in
+   light and a warm charcoal in dark; the series hues are its habitats and food
+   tokens (forest, plum berry, terracotta, shallow water, brick, wetland, seed
+   gold, nectar). Light and dark are separately chosen steps of the same hues,
+   each validated against its own darkest surface (see README). Series slots
+   carry player identity and must be assigned in fixed order, never cycled.
    --------------------------------------------------------------------------- */
 
 :root {
@@ -17,48 +20,48 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --plane: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-2: #f0efec;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #898781;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --hairline: rgb(11 11 11 / 0.1);
-  --good: #006300;
-  --critical: #d03b3b;
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #e87ba4;
-  --series-6: #008300;
-  --series-7: #4a3aa7;
-  --series-8: #e34948;
+  --plane: #f2eada;
+  --surface: #faf4e8;
+  --surface-2: #ebe1cd;
+  --ink: #1f1a11;
+  --ink-2: #554c3d;
+  --muted: #6b6150;
+  --grid: #e0d4ba;
+  --axis: #c3b596;
+  --hairline: rgb(31 26 17 / 0.12);
+  --good: #2c6b21;
+  --critical: #b23124;
+  --series-1: #0f9445;
+  --series-2: #9657d1;
+  --series-3: #c2580a;
+  --series-4: #0e88ad;
+  --series-5: #d33e4c;
+  --series-6: #0c7ddd;
+  --series-7: #95790b;
+  --series-8: #c0449a;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --plane: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-2: #232322;
-  --ink: #ffffff;
-  --ink-2: #c3c2b7;
-  --muted: #898781;
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --hairline: rgb(255 255 255 / 0.1);
-  --good: #0ca30c;
-  --critical: #e66767;
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --series-5: #d55181;
-  --series-6: #008300;
-  --series-7: #9085e9;
-  --series-8: #e66767;
+  --plane: #12100c;
+  --surface: #1b1915;
+  --surface-2: #262219;
+  --ink: #f8f3e9;
+  --ink-2: #c9bda8;
+  --muted: #948976;
+  --grid: #2d2921;
+  --axis: #3c372d;
+  --hairline: rgb(248 243 233 / 0.1);
+  --good: #4fa53c;
+  --critical: #e2695c;
+  --series-1: #11a14b;
+  --series-2: #a162dd;
+  --series-3: #d2600d;
+  --series-4: #1193bb;
+  --series-5: #df4a56;
+  --series-6: #0f87ee;
+  --series-7: #a1830d;
+  --series-8: #cc4fa5;
 }
 
 @theme inline {
