@@ -5,7 +5,13 @@ import { ScorePad } from '../components/ScorePad'
 import { Button, Card, PlayerDot, SectionTitle, Toggle } from '../components/ui'
 import { useStore, newId } from '../data/store'
 import { colorSlots, playerName } from '../lib/format'
-import { categoriesFor, groupKeyFor, modulesForPlayerCount, standingsFor } from '../lib/scoring'
+import {
+  categoriesFor,
+  groupKeyFor,
+  modulesForPlayerCount,
+  standingsFor,
+  withFirstPlayer,
+} from '../lib/scoring'
 import {
   MAX_PLAYERS,
   MODULE_DEFS,
@@ -49,6 +55,7 @@ export function Play({ onGoToHistory }: { onGoToHistory: () => void }) {
             groupKey: groupKeyFor(draft.playerIds),
             scores: draft.scores,
             winnerId: null,
+            firstPlayerId: draft.firstPlayerId ?? null,
           }
           await saveGame(game)
           setDraft(null)
@@ -227,6 +234,15 @@ function Entry({ onDiscard, onSave }: { onDiscard: () => void; onSave: () => Pro
     setDraft({ ...draft, scores: { ...draft.scores, [playerId]: line } })
   }
 
+  // Handing over the first-player token also moves that player to the leading
+  // column, so the pad reads left to right in turn order.
+  const setFirst = (playerId: string) =>
+    setDraft({
+      ...draft,
+      firstPlayerId: playerId,
+      playerIds: withFirstPlayer(draft.playerIds, playerId),
+    })
+
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-start justify-between gap-3">
@@ -252,6 +268,8 @@ function Entry({ onDiscard, onSave }: { onDiscard: () => void; onSave: () => Pro
           categories={categories}
           scores={draft.scores}
           onChange={change}
+          firstPlayerId={draft.firstPlayerId}
+          onFirstPlayer={setFirst}
         />
       </Card>
 

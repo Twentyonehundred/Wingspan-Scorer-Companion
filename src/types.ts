@@ -88,6 +88,13 @@ export interface Game {
    * tokens) was resolved by hand.
    */
   winnerId?: string | null
+  /**
+   * Who took the first turn. Turn order matters in Wingspan and the printed pad
+   * has nowhere to record it, so it is kept here and the UI seats this player in
+   * the leftmost column. Left undefined on games saved before it existed —
+   * defaulting to `playerIds[0]` would invent an answer for those.
+   */
+  firstPlayerId?: string | null
 }
 
 /** A game in progress, held locally so a refresh mid-scoring loses nothing. */
@@ -95,4 +102,5 @@ export interface Draft {
   modules: ModuleKey[]
   playerIds: string[]
   scores: Record<string, ScoreLine>
+  firstPlayerId?: string | null
 }

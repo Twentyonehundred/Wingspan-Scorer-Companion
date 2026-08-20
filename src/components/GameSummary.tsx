@@ -1,7 +1,7 @@
 import { colorSlots, playerName } from '../lib/format'
 import { categoriesFor, isUnresolvedTie, standingsFor } from '../lib/scoring'
 import type { Game, Player } from '../types'
-import { Button, PlayerDot } from './ui'
+import { Button, FirstPlayerMark, PlayerDot } from './ui'
 
 /** Final standings plus the full pad, used after saving and in history. */
 export function GameSummary({
@@ -41,6 +41,12 @@ export function GameSummary({
             <span className="min-w-0 flex-1 truncate text-lg font-bold">
               {playerName(players, s.playerId)}
             </span>
+            {game.firstPlayerId === s.playerId ? (
+              <>
+                <FirstPlayerMark active inverse={s.isWinner} size={15} />
+                <span className="sr-only">Went first</span>
+              </>
+            ) : null}
             {s.isWinner ? (
               <span className="text-xs font-bold tracking-[0.14em] text-plane/70 uppercase">Won</span>
             ) : null}

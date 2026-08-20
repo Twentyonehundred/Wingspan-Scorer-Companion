@@ -75,6 +75,21 @@ export function isUnresolvedTie(game: Game): boolean {
   return values.filter((v) => v === top).length > 1
 }
 
+/**
+ * Seat `id` in the leading chair, trading places with whoever is in it. A swap
+ * rather than a rotation: the rest of the list is where people are actually
+ * sitting, so only the two involved should move — and it keeps the animation
+ * honest about what happened.
+ */
+export function withFirstPlayer(playerIds: readonly string[], id: string): string[] {
+  const at = playerIds.indexOf(id)
+  if (at <= 0) return [...playerIds]
+  const next = [...playerIds]
+  next[at] = next[0]
+  next[0] = id
+  return next
+}
+
 /** Sorted-and-joined player ids: the stable identity of a playing group. */
 export function groupKeyFor(playerIds: readonly string[]): string {
   return [...playerIds].sort().join('|')

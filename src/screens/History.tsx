@@ -2,7 +2,16 @@ import { useMemo, useState } from 'react'
 import { GameSummary } from '../components/GameSummary'
 import { GroupChips, groupLabel } from '../components/GroupChips'
 import { ScorePad } from '../components/ScorePad'
-import { Button, Card, ConfirmDialog, Empty, PlayerDot, Sheet, dismissSheet } from '../components/ui'
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  Empty,
+  FirstPlayerMark,
+  PlayerDot,
+  Sheet,
+  dismissSheet,
+} from '../components/ui'
 import { useStore } from '../data/store'
 import {
   colorSlots,
@@ -12,7 +21,7 @@ import {
   playerName,
   toDateInputValue,
 } from '../lib/format'
-import { categoriesFor, standingsFor } from '../lib/scoring'
+import { categoriesFor, standingsFor, withFirstPlayer } from '../lib/scoring'
 import { summariseGroups } from '../lib/stats'
 import { MODULE_DEFS, type CategoryKey, type Game, type ScoreLine } from '../types'
 
@@ -106,12 +115,21 @@ function GameRow({ game, onOpen }: { game: Game; onOpen: () => void }) {
           {standings.map((s) => (
             <li key={s.playerId} className="flex items-center gap-2.5">
               <PlayerDot slot={slots[s.playerId]} />
-              <span
-                className={
-                  'min-w-0 flex-1 truncate ' + (s.isWinner ? 'font-bold' : 'font-medium text-ink-2')
-                }
-              >
-                {playerName(players, s.playerId)}
+              <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span
+                  className={
+                    'min-w-0 truncate ' + (s.isWinner ? 'font-bold' : 'font-medium text-ink-2')
+                  }
+                >
+                  {playerName(players, s.playerId)}
+                </span>
+                {/* Who went first is the thing you come back days later to check. */}
+                {game.firstPlayerId === s.playerId ? (
+                  <>
+                    <FirstPlayerMark active size={14} />
+                    <span className="sr-only">went first</span>
+                  </>
+                ) : null}
               </span>
               <span className={'tabular-nums ' + (s.isWinner ? 'text-xl font-bold' : 'text-lg font-semibold text-ink-2')}>
                 {s.total}
@@ -171,6 +189,14 @@ function GameSheet({ game, onClose }: { game: Game | null; onClose: () => void }
             categories={categories}
             scores={game.scores}
             onChange={change}
+            firstPlayerId={game.firstPlayerId}
+            onFirstPlayer={(id) =>
+              void saveGame({
+                ...game,
+                firstPlayerId: id,
+                playerIds: withFirstPlayer(game.playerIds, id),
+              })
+            }
           />
         ) : (
           <GameSummary

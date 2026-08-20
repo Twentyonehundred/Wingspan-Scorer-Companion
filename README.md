@@ -33,6 +33,15 @@ Arrow keys do the same thing for anyone on a laptop. The steppers cost width,
 so a phone scrolls the pad sideways from three players up, with the category
 column pinned.
 
+**Who went first.** Turn order matters and the printed pad has nowhere to put
+it, so the pad carries a first-player token: tap the dashed ① under a name and
+that player takes it, swapping into the leftmost column so the pad reads left to
+right in turn order. It's a swap rather than a rotation — everyone else is
+sitting where they were sitting. History shows the token in the game listing and
+on the game itself, which is the point: you can check who started last time
+before setting up the next one. Games saved before this existed show no token
+rather than a guess.
+
 **Version.** The footer shows the version and when that copy was built (`dev`
 under the dev server). An installed PWA serving a service-worker-cached build
 is otherwise indistinguishable from a fresh one.

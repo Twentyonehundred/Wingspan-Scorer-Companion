@@ -167,8 +167,13 @@ function firestoreBackend(uid: string): Backend {
     },
     async putGame(game) {
       const { id, ...rest } = game
-      // Firestore rejects `undefined`; a missing tiebreak is stored as null.
-      await setDoc(doc(gamesRef, id), { ...rest, winnerId: rest.winnerId ?? null })
+      // Firestore rejects `undefined`; a missing tiebreak or unrecorded first
+      // player is stored as null.
+      await setDoc(doc(gamesRef, id), {
+        ...rest,
+        winnerId: rest.winnerId ?? null,
+        firstPlayerId: rest.firstPlayerId ?? null,
+      })
     },
     async putPrefs(prefs) {
       await setDoc(prefsRef, prefs)

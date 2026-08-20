@@ -94,6 +94,72 @@ export function PlayerDot({ slot, size = 10 }: { slot: number; size?: number }) 
   )
 }
 
+/**
+ * The first-player token. Filled when it's this player's, a dashed outline when
+ * it's the offer to become one — the outline is what makes the control findable
+ * before anyone has been marked, and it reads as an empty seat rather than a
+ * disabled control.
+ *
+ * `inverse` is for the winner's row in the standings, which is `bg-ink`.
+ */
+export function FirstPlayerMark({
+  active,
+  inverse,
+  size = 16,
+}: {
+  active?: boolean
+  inverse?: boolean
+  size?: number
+}) {
+  const tone = active
+    ? inverse
+      ? 'bg-plane text-ink'
+      : 'bg-ink text-plane'
+    : inverse
+      ? 'border border-dashed border-plane/45 text-plane/70'
+      : 'border border-dashed border-axis text-muted'
+
+  return (
+    <span
+      aria-hidden
+      className={`grid shrink-0 place-items-center rounded-full font-bold ${tone}`}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.62), lineHeight: 1 }}
+    >
+      1
+    </span>
+  )
+}
+
+/** The same token, as the control that hands it to someone. */
+export function FirstPlayerButton({
+  active,
+  name,
+  onSelect,
+}: {
+  active: boolean
+  name: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={active ? `${name} went first` : `Mark ${name} as going first`}
+      title={active ? `${name} went first` : `${name} went first?`}
+      // Already-first is a no-op rather than disabled, so the token stays at
+      // full strength and keeps announcing who holds it.
+      onClick={() => !active && onSelect()}
+      className={
+        'grid h-8 w-8 place-items-center rounded-full transition-colors ' +
+        'active:bg-hairline focus-visible:outline-2 focus-visible:outline-offset-1 ' +
+        'focus-visible:outline-ink'
+      }
+    >
+      <FirstPlayerMark active={active} />
+    </button>
+  )
+}
+
 export function Chip({
   selected,
   onClick,
