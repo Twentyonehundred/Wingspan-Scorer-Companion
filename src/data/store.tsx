@@ -31,6 +31,16 @@ import {
 import { auth, db, firebaseConfigured } from '../firebase'
 import { groupKeyFor } from '../lib/scoring'
 import type { Draft, Game, ModuleKey, Player } from '../types'
+import {
+  shareWith as putShare,
+  stopSharing as removeShare,
+  watchAccount,
+  watchAllAccounts,
+  watchOwnAccount,
+  type Account,
+} from './accounts'
+
+export { profileFor, type Account, type Profile } from './accounts'
 
 /**
  * The setup to open on next time. Held against the account rather than derived
@@ -217,6 +227,17 @@ interface Store {
   signIn: () => Promise<void>
   signOutToSandbox: () => Promise<void>
 
+  /**
+   * Every account, or `null` when the rules refused the query — which is the
+   * app owner check. There is no server to mint a claim on this plan, so
+   * "am I the owner?" is answered by asking Firestore and seeing what it says.
+   */
+  accounts: Account[] | null
+  /** Set when these games belong to someone who shared them with you. */
+  sharedFrom: Account | null
+  shareWith: (guestId: string) => Promise<void>
+  stopSharing: (guestId: string) => Promise<void>
+
   players: Player[]
   games: Game[]
   prefs: Prefs | null
@@ -247,6 +268,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     firebaseConfigured ? 'loading' : 'local',
   )
   const [authError, setAuthError] = useState<string | null>(null)
+  const [account, setAccount] = useState<Account | null>(null)
+  // `false` until the account document has been read once, so the data backend
+  // can wait rather than guess at the workspace.
+  const [accountKnown, setAccountKnown] = useState(false)
+  const [accounts, setAccounts] = useState<Account[] | null>(null)
+  const [sharedFrom, setSharedFrom] = useState<Account | null>(null)
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY)
   const [ready, setReady] = useState(!firebaseConfigured)
   const [draft, setDraftState] = useState<Draft | null>(() => readDraft())
@@ -278,19 +305,68 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  /* Data: rebuild the backend whenever the signed-in user changes. */
+  /* The account row: who you are to the other accounts, and which workspace
+     you are pointed at. Anonymous sessions never get one — they are sandboxes,
+     not people — so they are known immediately and use their own uid. */
   useEffect(() => {
-    const backend =
-      auth && user ? firestoreBackend(user.uid) : firebaseConfigured ? null : localBackend()
-    backendRef.current = backend
-    if (!backend) return
+    setAccount(null)
+    setAccountKnown(false)
+    if (!db || !user) return
+    if (user.isAnonymous) {
+      setAccountKnown(true)
+      return
+    }
+    return watchOwnAccount(user, (a) => {
+      setAccount(a)
+      setAccountKnown(true)
+    })
+  }, [user])
 
-    const off = backend.subscribe((s) => {
+  /* The registry. Only the app owner may read it, so a refusal is the answer to
+     "should the admin section be here?" and the rules stay the only place the
+     owner is named. */
+  useEffect(() => {
+    setAccounts(null)
+    if (!db || !user || user.isAnonymous) return
+    return watchAllAccounts(setAccounts)
+  }, [user])
+
+  const workspaceId = !user ? null : accountKnown ? (account?.workspaceId ?? user.uid) : null
+  const hostId = workspaceId && user && workspaceId !== user.uid ? workspaceId : null
+
+  /* Whose games these are, when they aren't yours. */
+  useEffect(() => {
+    setSharedFrom(null)
+    if (!db || !hostId) return
+    return watchAccount(hostId, setSharedFrom)
+  }, [hostId])
+
+  /* Data: the backend follows the workspace. Held back until it is known, so a
+     guest never flashes their own empty history before switching over. */
+  useEffect(() => {
+    if (!firebaseConfigured) {
+      const backend = localBackend()
+      backendRef.current = backend
+      return backend.subscribe((s) => {
+        setSnapshot(s)
+        setReady(true)
+      })
+    }
+
+    // A change of workspace is a change of everything. Clear rather than let
+    // the old pile sit there looking current until the first snapshot lands.
+    backendRef.current = null
+    setSnapshot(EMPTY)
+    setReady(false)
+    if (!auth || !workspaceId) return
+
+    const backend = firestoreBackend(workspaceId)
+    backendRef.current = backend
+    return backend.subscribe((s) => {
       setSnapshot(s)
       setReady(true)
     })
-    return off
-  }, [user])
+  }, [workspaceId])
 
   const setDraft = useCallback((next: Draft | null) => {
     setDraftState(next)
@@ -341,6 +417,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await fbSignOut(auth)
     await signInAnonymously(auth)
   }, [])
+
+  /**
+   * Hand another account your games. From then on you are both reading and
+   * writing the same pile: whatever either of you scores, both of you see.
+   */
+  const shareWith = useCallback(
+    async (guestId: string) => {
+      if (!user || guestId === user.uid) return
+      await putShare(user.uid, guestId)
+    },
+    [user],
+  )
+
+  const stopSharing = useCallback(
+    async (guestId: string) => {
+      if (!user) return
+      await removeShare(user.uid, guestId)
+    },
+    [user],
+  )
 
   const addPlayer = useCallback(
     async (name: string) => {
@@ -423,6 +519,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     authError,
     signIn,
     signOutToSandbox,
+    accounts,
+    sharedFrom,
+    shareWith,
+    stopSharing,
     players,
     games,
     prefs: snapshot.prefs,
@@ -438,28 +538,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
-}
-
-export interface Profile {
-  name: string | null
-  photoURL: string | null
-  email: string | null
-}
-
-/**
- * Linking Google to an anonymous session leaves the user's own displayName and
- * photoURL null — the provider keeps them. Read through to providerData so the
- * account shows a real name and picture either way.
- */
-export function profileFor(user: User | null): Profile {
-  if (!user) return { name: null, photoURL: null, email: null }
-  const google = user.providerData.find((p) => p.providerId === 'google.com')
-  const provider = google ?? user.providerData[0]
-  return {
-    name: user.displayName ?? provider?.displayName ?? null,
-    photoURL: user.photoURL ?? provider?.photoURL ?? null,
-    email: user.email ?? provider?.email ?? null,
-  }
 }
 
 function errorMessage(err: unknown): string {

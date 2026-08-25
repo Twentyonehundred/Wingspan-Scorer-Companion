@@ -1,12 +1,73 @@
 rules_version = '2';
 
-// Every document lives under the signed-in user's own subtree, and nobody can
-// read or write anyone else's. Anonymous sessions count as signed in, so a
-// visitor's sandbox is isolated the same way a real account is.
+/**
+ * Two kinds of access.
+ *
+ * Everyone owns the subtree under their own uid — including the anonymous
+ * session every visitor is given, so a stranger's sandbox is isolated exactly
+ * the way a real account is. That check comes first and is self-contained, so a
+ * sandbox never triggers the lookup below.
+ *
+ * On top of that, an account can hand its whole subtree to other accounts by
+ * listing their uids in `sharedWith` on its own registry document. That is what
+ * makes a household one shared pile of games rather than two private ones: the
+ * guest's app reads and writes the host's subtree directly, so there is nothing
+ * to merge and no second copy to drift.
+ *
+ * Handing out that access is restricted to the person who owns the app. There
+ * is no server here to mint a custom claim — Cloud Functions need a billing
+ * plan this project isn't on — so it is pinned to a verified Google address.
+ * Sign-in with Google always yields a verified email; the flag is checked
+ * anyway so a future provider can't walk in with an unverified one.
+ */
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAppOwner() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'casukmail@gmail.com';
+    }
+
+    /** True when `ownerId` has granted the caller access to its subtree. */
+    function sharesWithCaller(ownerId) {
+      let account = get(/databases/$(database)/documents/users/$(ownerId));
+      return account != null && request.auth.uid in account.data.get('sharedWith', []);
+    }
+
+    /**
+     * The registry: one document per signed-in account, holding the name, email
+     * and picture the owner picks from when sharing. Anonymous sessions never
+     * write one, which is what keeps the list to real people — every visitor
+     * gets an anonymous uid and there are already far more of those than
+     * accounts.
+     */
+    match /users/{userId} {
+      allow get: if signedIn() && (
+        request.auth.uid == userId
+        || isAppOwner()
+        // You can see the profile of whoever shared their games with you, so
+        // the app can name them instead of saying "someone".
+        || request.auth.uid in resource.data.get('sharedWith', [])
+      );
+      allow list: if isAppOwner();
+
+      // You maintain your own row.
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      // The owner may point another account at a workspace, and nothing else —
+      // not their name, not their email, not who they in turn share with.
+      allow update: if isAppOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['workspaceId']);
+    }
+
+    /** The data itself: players, games and the remembered setup. */
+    match /users/{ownerId}/{document=**} {
+      allow read, write: if signedIn()
+        && (request.auth.uid == ownerId || sharesWithCaller(ownerId));
     }
   }
 }

@@ -42,6 +42,14 @@ on the game itself, which is the point: you can check who started last time
 before setting up the next one. Games saved before this existed show no token
 rather than a guess.
 
+**Sharing a history.** Two people in the same house are keeping one set of
+records, not two, so sharing points the second account at the first one's games
+rather than copying them. Both then read and write the same pile: whoever scores
+the evening, it's there for both of them, with nothing to sync up afterwards and
+no chance of the two copies disagreeing. Turning it off leaves the shared games
+where they are and hands the guest back their own, untouched — see
+[Sharing and admin](#sharing-and-admin).
+
 **Version.** The footer shows the version and when that copy was built (`dev`
 under the dev server). An installed PWA serving a service-worker-cached build
 is otherwise indistinguishable from a fresh one.
@@ -83,8 +91,51 @@ account that already has data — that account wins and the local sandbox is
 dropped.
 
 `firestore.rules` scopes every document to `users/{uid}`, so nobody can read
-anyone else's games. The web config in `.env` is not a secret; Firebase web
-configs are public by design and the rules are the access control.
+anyone else's games unless they've been shared with. The web config in `.env` is
+not a secret; Firebase web configs are public by design and the rules are the
+access control.
+
+## Sharing and admin
+
+Signing in with Google adds a row at `users/{uid}` holding just a name, email,
+picture and last-seen date. Anonymous visitors don't get one — every visitor
+gets an anonymous session on arrival, so including them would bury the handful
+of real accounts under a pile of one-time sandboxes.
+
+That row also carries **`workspaceId`**, the uid whose games this account
+actually uses. It's your own until someone shares theirs with you, at which
+point it points at them and their subtree becomes the one you read and write.
+Sharing is a redirection, not a copy, which is why there is nothing to merge:
+
+```
+users/{host}/games   ← both people read and write here while shared
+users/{host}         sharedWith: [guest]
+users/{guest}        workspaceId: host      ← the redirection
+users/{guest}/games  kept, just not shown until sharing stops
+```
+
+**Settings → People** lists the accounts and toggles sharing. It only appears
+for the app owner, and that is enforced by the rules rather than the UI: the
+client subscribes to the `users` collection and shows the section only if
+Firestore allows the query. The owner is pinned in `firestore.rules` by verified
+email, because minting a custom claim needs Cloud Functions and a billing plan
+this project isn't on. **Change that address before deploying your own copy.**
+
+Listing accounts does not grant access to their games — the owner sees who has
+signed up and nothing more until a share is switched on.
+
+```
+npm run test:rules
+```
+
+exercises all of that — sharing, revoking, the owner-only paths and the
+sandbox isolation — against the hosted rules test API, so it needs no Java
+runtime and no emulator. It tests `firestore.rules` as it is on disk, so run it
+before deploying an edit.
+
+One consequence worth knowing: the remembered setup (last players, last
+expansions) lives in the workspace too, so while sharing is on it follows the
+shared games rather than each device.
 
 ## Deploying
 
@@ -117,7 +168,9 @@ src/
   lib/scoring.ts        which categories are in play, totals, standings, ties
   lib/stats.ts          groups, per-player averages, category edges
   data/store.tsx        auth + Firestore, with a localStorage fallback
+  data/accounts.ts      the account registry and sharing
   components/           ScorePad, GameSummary, charts, primitives
   screens/              Play (setup → pad → result), History, Stats, Settings
 scripts/gen-icons.mjs   regenerates the icon set from inline SVG
+scripts/test-rules.mjs  security-rules tests (npm run test:rules)
 ```

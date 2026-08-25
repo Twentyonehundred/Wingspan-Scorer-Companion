@@ -8,6 +8,7 @@ import {
   PlayerDot,
   SectionTitle,
   Sheet,
+  Toggle,
 } from '../components/ui'
 import { profileFor, useStore } from '../data/store'
 import { colorSlots } from '../lib/format'
@@ -40,6 +41,10 @@ export function Settings({
     authError,
     signIn,
     signOutToSandbox,
+    accounts,
+    sharedFrom,
+    shareWith,
+    stopSharing,
     renamePlayer,
     deletePlayer,
     gamesForPlayer,
@@ -51,6 +56,17 @@ export function Settings({
   const [pendingDelete, setPendingDelete] = useState<Player | null>(null)
 
   const pendingGames = pendingDelete ? gamesForPlayer(pendingDelete.id).length : 0
+
+  // Everyone who has signed in, most recent first, minus yourself. Present only
+  // for the app owner — for anyone else `accounts` is null and the section
+  // below never renders.
+  const others = accounts
+    ?.filter((a) => a.uid !== user?.uid)
+    .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+  // Your own list of who's been let in. This is the fact that grants access, so
+  // it's what the switch reflects; pointing them at your games is the separate,
+  // second half, and worth saying when only one of the two has happened.
+  const sharedWith = accounts?.find((a) => a.uid === user?.uid)?.sharedWith ?? []
 
   const gameCount = (playerId: string) => gamesForPlayer(playerId).length
 
@@ -103,6 +119,15 @@ export function Settings({
                     <p className="truncate text-sm text-ink-2">{profile.email ?? 'Synced'}</p>
                   </div>
                 </div>
+                {sharedFrom ? (
+                  <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2.5 text-sm text-ink-2">
+                    You're scoring in{' '}
+                    <span className="font-semibold text-ink">
+                      {sharedFrom.name ?? sharedFrom.email ?? 'someone else'}
+                    </span>
+                    's games. Anything either of you logs shows up for you both.
+                  </p>
+                ) : null}
                 <Button variant="secondary" className="mt-3 w-full" onClick={() => void signOutToSandbox()}>
                   Sign out
                 </Button>
@@ -121,6 +146,56 @@ export function Settings({
             {authError ? <p className="mt-3 text-sm text-critical">{authError}</p> : null}
           </Card>
         </section>
+
+        {others ? (
+          <section>
+            <SectionTitle>People</SectionTitle>
+            <p className="mb-2 text-sm text-ink-2">
+              Everyone who has signed in. Share your games with someone and you both keep one
+              history — whatever either of you scores, you both see.
+            </p>
+            {others.length ? (
+              <Card className="divide-y divide-hairline">
+                {others.map((person) => {
+                  const shared = sharedWith.includes(person.uid)
+                  const looking = person.workspaceId === user?.uid
+                  const name = person.name ?? person.email ?? 'Signed-in account'
+                  return (
+                    <Toggle
+                      key={person.uid}
+                      checked={shared}
+                      onChange={(next) =>
+                        void (next ? shareWith(person.uid) : stopSharing(person.uid))
+                      }
+                      label={
+                        <span className="flex items-center gap-3">
+                          <Avatar signedIn photoURL={person.photoURL} name={name} size={32} />
+                          <span className="min-w-0">
+                            <span className="block truncate">{name}</span>
+                            {person.email && person.email !== name ? (
+                              <span className="block truncate text-sm font-normal text-ink-2">
+                                {person.email}
+                              </span>
+                            ) : null}
+                          </span>
+                        </span>
+                      }
+                      hint={
+                        !shared
+                          ? undefined
+                          : looking
+                            ? 'Scoring into your games. Their own history is kept, just hidden until you turn this off.'
+                            : 'Let in, but still using their own games. Turn this off and on again to point them at yours.'
+                      }
+                    />
+                  )
+                })}
+              </Card>
+            ) : (
+              <p className="text-sm text-ink-2">Nobody else has signed in yet.</p>
+            )}
+          </section>
+        ) : null}
 
         <section>
           <SectionTitle>Players</SectionTitle>
