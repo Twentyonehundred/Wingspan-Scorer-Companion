@@ -38,9 +38,19 @@ it, so the pad carries a first-player token: tap the dashed ① under a name and
 that player takes it, swapping into the leftmost column so the pad reads left to
 right in turn order. It's a swap rather than a rotation — everyone else is
 sitting where they were sitting. History shows the token in the game listing and
-on the game itself, which is the point: you can check who started last time
-before setting up the next one. Games saved before this existed show no token
-rather than a guess.
+on the game itself. Games saved before this existed show no token rather than a
+guess.
+
+**Whose turn it is to start.** Going first is worth something, so a group that
+plays regularly passes it around — and the setup screen leads with the answer
+rather than making you work it out from history. It's whoever in the lineup has
+gone longest without starting, with never having started counting as longest of
+all, read from games that exact lineup played: a rotation between four people
+says nothing about a night when two of them played alone. It's never whoever
+started last time, which is what makes it a rotation. Tap through and they're
+already holding the token and seated on the left, one tap to hand over if the
+table disagrees. A lineup with nothing recorded yet says so instead of picking
+someone.
 
 **Sharing a history.** Two people in the same house are keeping one set of
 records, not two, so sharing points the second account at the first one's games

@@ -95,6 +95,58 @@ export function groupKeyFor(playerIds: readonly string[]): string {
   return [...playerIds].sort().join('|')
 }
 
+export interface FirstPlayerTurn {
+  /** Whose turn it is to start, or null when there is nothing to go on. */
+  nextId: string | null
+  /** Who started the most recent game this lineup played. */
+  lastId: string | null
+  lastPlayedAt: number | null
+}
+
+/**
+ * Whose turn it is to go first. Turn order is worth a real advantage in
+ * Wingspan, so a group that plays regularly passes the start around, and the
+ * thing you actually want to know when setting up is who is owed it.
+ *
+ * That's whoever has gone longest without — never having started counts as
+ * longest of all — read from games this exact lineup played. Exact, because a
+ * group is the precise set of people who sat down everywhere else in the app,
+ * and because a rotation between four people says nothing about a night when
+ * two of them played alone.
+ *
+ * The answer is never the person who started last time, which is what makes it
+ * a rotation: their turn is the most recent by definition.
+ */
+export function firstPlayerTurn(
+  games: readonly Game[],
+  playerIds: readonly string[],
+): FirstPlayerTurn {
+  const nothing: FirstPlayerTurn = { nextId: null, lastId: null, lastPlayedAt: null }
+  if (playerIds.length < 2) return nothing
+
+  // Games from before this was recorded can't answer the question, and saying
+  // nothing beats guessing from them.
+  const key = groupKeyFor(playerIds)
+  const history = games
+    .filter((g) => g.groupKey === key && g.firstPlayerId)
+    .sort((a, b) => b.playedAt - a.playedAt)
+  if (!history.length) return nothing
+
+  const started = new Map<string, number>()
+  for (const game of history) {
+    if (!started.has(game.firstPlayerId!)) started.set(game.firstPlayerId!, game.playedAt)
+  }
+
+  // Lowest wins, and never-started is lower than any date. Only a strict
+  // improvement displaces the incumbent, so ties fall to whoever the lineup
+  // lists first and the answer doesn't wander between renders.
+  const since = (id: string) => started.get(id) ?? -Infinity
+  let nextId = playerIds[0]
+  for (const id of playerIds) if (since(id) < since(nextId)) nextId = id
+
+  return { nextId, lastId: history[0].firstPlayerId!, lastPlayedAt: history[0].playedAt }
+}
+
 export function modulesForPlayerCount(
   modules: readonly ModuleKey[],
   playerCount: number,

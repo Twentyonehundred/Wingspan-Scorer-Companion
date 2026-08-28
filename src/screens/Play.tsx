@@ -2,11 +2,19 @@ import { useMemo, useState } from 'react'
 import { GameSummary } from '../components/GameSummary'
 import { PlayerPicker } from '../components/PlayerPicker'
 import { ScorePad } from '../components/ScorePad'
-import { Button, Card, PlayerDot, SectionTitle, Toggle } from '../components/ui'
+import {
+  Button,
+  Card,
+  FirstPlayerMark,
+  PlayerDot,
+  SectionTitle,
+  Toggle,
+} from '../components/ui'
 import { useStore, newId } from '../data/store'
-import { colorSlots, playerName } from '../lib/format'
+import { colorSlots, formatRelativeDay, playerName } from '../lib/format'
 import {
   categoriesFor,
+  firstPlayerTurn,
   groupKeyFor,
   modulesForPlayerCount,
   standingsFor,
@@ -102,6 +110,10 @@ function Setup() {
 
   const available = modulesForPlayerCount(state.modules, state.playerIds.length)
   const slots = colorSlots(players, state.playerIds)
+  const turn = useMemo(
+    () => firstPlayerTurn(games, state.playerIds),
+    [games, state.playerIds],
+  )
 
   const update = (next: Partial<SetupState>) => {
     const merged = { ...state, ...next }
@@ -114,6 +126,36 @@ function Setup() {
         <h1 className="text-3xl font-bold">New game</h1>
         <p className="mt-1 text-ink-2">Switch on whatever changes the score pad.</p>
       </header>
+
+      {/* Above the setup rather than after it: whose turn it is to start is the
+          thing you open the app to check, and the lineup it reads from is
+          already the one you last played. */}
+      {state.playerIds.length > 1 ? (
+        <Card className="px-5 py-4">
+          {turn.nextId ? (
+            <div className="flex items-center gap-3.5">
+              <FirstPlayerMark active size={30} />
+              <div className="min-w-0">
+                <p className="text-lg leading-tight font-bold">
+                  {playerName(players, turn.nextId)} goes first
+                </p>
+                <p className="mt-1 text-sm text-ink-2">
+                  {playerName(players, turn.lastId!)} started last time ·{' '}
+                  {formatRelativeDay(turn.lastPlayedAt!, Date.now())}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3.5">
+              <FirstPlayerMark size={30} />
+              <p className="min-w-0 text-sm text-ink-2">
+                No first player recorded for this lineup yet. Mark one on the pad and the next game
+                will know whose turn it is.
+              </p>
+            </div>
+          )}
+        </Card>
+      ) : null}
 
       <section>
         <SectionTitle>Score pad</SectionTitle>
@@ -199,7 +241,16 @@ function Setup() {
             // Remember the lineup at the moment it's chosen, not on save, so a
             // discarded game still updates who you normally play with.
             void saveSetup({ lastModules: available, lastPlayerIds: state.playerIds })
-            setDraft({ modules: available, playerIds: state.playerIds, scores: {} })
+            // Carry the answer through rather than make it be tapped in again.
+            // It stays a suggestion — the pad's token reassigns it in one tap.
+            setDraft({
+              modules: available,
+              playerIds: turn.nextId
+                ? withFirstPlayer(state.playerIds, turn.nextId)
+                : state.playerIds,
+              scores: {},
+              firstPlayerId: turn.nextId,
+            })
           }}
         >
           Start scoring
